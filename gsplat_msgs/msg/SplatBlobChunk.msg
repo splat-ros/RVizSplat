@@ -1,0 +1,14 @@
+std_msgs/Header header
+string session_id
+uint64 version
+uint32 chunk_index
+uint32 chunk_count
+uint32 chunk_size
+uint64 total_size
+uint64 uncompressed_size
+string format
+string compression
+uint8[] data
+uint64 chunk_crc64
+bool replace_current
+geometry_msgs/Transform map_from_source

@@ -21,8 +21,11 @@
 
 #include "gsplat_rviz_plugin/sorters/i_splat_sorter.hpp"
 #include "gsplat_rviz_plugin/sorters/sorter_factory.hpp"
+#include "gsplat_rviz_plugin/splat_loaders/blob_topic_source.hpp"
 #include "gsplat_rviz_plugin/splat_loaders/ply_file_source.hpp"
 #include "gsplat_rviz_plugin/splat_loaders/ros_topic_source.hpp"
+#include "gsplat_rviz_plugin/splat_loaders/snapshot_ref_source.hpp"
+#include "gsplat_rviz_plugin/splat_loaders/tile_stream_source.hpp"
 #include "gsplat_rviz_plugin/splat_cloud.hpp"
 #include "gsplat_rviz_plugin/splat_gpu.hpp"
 #include "gsplat_rviz_plugin/transparency/wboit_compositor.hpp"
@@ -43,7 +46,11 @@ GsplatDisplay::GsplatDisplay()
     "active at a time.",
     this, SLOT(onSourceModeChanged()), this);
   source_mode_property_->addOption("PLY File", static_cast<int>(SourceMode::File));
-  source_mode_property_->addOption("Topic",    static_cast<int>(SourceMode::Topic));
+  source_mode_property_->addOption("SplatArray Topic", static_cast<int>(SourceMode::Topic));
+  source_mode_property_->addOption("Snapshot Ref", static_cast<int>(SourceMode::SnapshotRef));
+  source_mode_property_->addOption("Blob Topic", static_cast<int>(SourceMode::BlobTopic));
+  source_mode_property_->addOption(
+    "Tile Stream", static_cast<int>(SourceMode::TileStream));
 
   splat_path_property_ = new rviz_common::properties::FilePickerProperty(
     "Splat File", "",
@@ -57,8 +64,34 @@ GsplatDisplay::GsplatDisplay()
     "gsplat_msgs/SplatArray topic to subscribe to. Each message replaces "
     "the currently displayed splats.",
     this, SLOT(onTopicChanged()), this);
-  // Default mode is PLY File — hide the topic field until the user flips it.
+
+  snapshot_ref_topic_property_ = new rviz_common::properties::RosTopicProperty(
+    "Snapshot Ref", "",
+    "gsplat_msgs/msg/SplatSnapshotRef",
+    "gsplat_msgs/SplatSnapshotRef topic containing file:// or absolute path "
+    "snapshot references.",
+    this, SLOT(onSnapshotRefTopicChanged()), this);
+
+  blob_topic_property_ = new rviz_common::properties::RosTopicProperty(
+    "Blob Topic", "",
+    "gsplat_msgs/msg/SplatBlobChunk",
+    "gsplat_msgs/SplatBlobChunk topic. Chunks are assembled into a full "
+    "snapshot before replacing the displayed splats.",
+    this, SLOT(onBlobTopicChanged()), this);
+
+  // Default mode is PLY File — hide topic fields until the user flips modes.
   topic_property_->hide();
+  snapshot_ref_topic_property_->hide();
+  blob_topic_property_->hide();
+
+  tile_topic_property_ = new rviz_common::properties::RosTopicProperty(
+    "Tile Stream Topic", "",
+    "gsplat_msgs/msg/SplatTileChunk",
+    "gsplat_msgs/SplatTileChunk topic to subscribe to. Chunks are assembled "
+    "into a persistent tile cache and committed versions replace the displayed "
+    "snapshot.",
+    this, SLOT(onTileTopicChanged()), this);
+  tile_topic_property_->hide();
 
   buildAdvancedGroup();
 }
@@ -205,6 +238,9 @@ void GsplatDisplay::onInitialize()
   rebuildSorter();
 
   topic_property_->initialize(context_->getRosNodeAbstraction());
+  snapshot_ref_topic_property_->initialize(context_->getRosNodeAbstraction());
+  blob_topic_property_->initialize(context_->getRosNodeAbstraction());
+  tile_topic_property_->initialize(context_->getRosNodeAbstraction());
 
   // Seed uniforms from the initial property values.
   onClipChanged();
@@ -216,13 +252,22 @@ void GsplatDisplay::onEnable()
 {
   if (currentMode() == SourceMode::Topic) {
     onTopicChanged();
+  } else if (currentMode() == SourceMode::SnapshotRef) {
+    onSnapshotRefTopicChanged();
+  } else if (currentMode() == SourceMode::BlobTopic) {
+    onBlobTopicChanged();
+  } else if (currentMode() == SourceMode::TileStream) {
+    onTileTopicChanged();
   }
   applyTransparencyMode();
 }
 
 void GsplatDisplay::onDisable()
 {
-  if (source_kind_ == SourceKind::Topic) {
+  if (source_kind_ == SourceKind::Topic ||
+      source_kind_ == SourceKind::SnapshotRef ||
+      source_kind_ == SourceKind::BlobTopic ||
+      source_kind_ == SourceKind::TileStream) {
     ++source_gen_;
     source_.reset();
     source_kind_ = SourceKind::None;
@@ -313,6 +358,111 @@ void GsplatDisplay::onTopicChanged()
     SourceKind::Topic);
 }
 
+void GsplatDisplay::onSnapshotRefTopicChanged()
+{
+  if (currentMode() != SourceMode::SnapshotRef) return;
+
+  if (!isEnabled()) {
+    ++source_gen_;
+    source_.reset();
+    source_kind_ = SourceKind::None;
+    return;
+  }
+
+  const std::string topic = snapshot_ref_topic_property_->getTopicStd();
+  if (topic.empty()) {
+    ++source_gen_;
+    source_.reset();
+    source_kind_ = SourceKind::None;
+    setStatus(
+      rviz_common::properties::StatusProperty::Warn,
+      "Snapshot Ref", "No snapshot ref topic selected.");
+    return;
+  }
+
+  auto node_abs = context_ ? context_->getRosNodeAbstraction().lock() : nullptr;
+  if (!node_abs) {
+    setStatus(
+      rviz_common::properties::StatusProperty::Error,
+      "Snapshot Ref", "RViz ROS node unavailable.");
+    return;
+  }
+
+  installSource(
+    std::make_unique<SnapshotRefSource>(node_abs->get_raw_node(), topic),
+    SourceKind::SnapshotRef);
+}
+
+void GsplatDisplay::onBlobTopicChanged()
+{
+  if (currentMode() != SourceMode::BlobTopic) return;
+
+  if (!isEnabled()) {
+    ++source_gen_;
+    source_.reset();
+    source_kind_ = SourceKind::None;
+    return;
+  }
+
+  const std::string topic = blob_topic_property_->getTopicStd();
+  if (topic.empty()) {
+    ++source_gen_;
+    source_.reset();
+    source_kind_ = SourceKind::None;
+    setStatus(
+      rviz_common::properties::StatusProperty::Warn,
+      "Blob Topic", "No blob topic selected.");
+    return;
+  }
+
+  auto node_abs = context_ ? context_->getRosNodeAbstraction().lock() : nullptr;
+  if (!node_abs) {
+    setStatus(
+      rviz_common::properties::StatusProperty::Error,
+      "Blob Topic", "RViz ROS node unavailable.");
+    return;
+  }
+
+  installSource(
+    std::make_unique<BlobTopicSource>(node_abs->get_raw_node(), topic),
+    SourceKind::BlobTopic);
+}
+
+void GsplatDisplay::onTileTopicChanged()
+{
+  if (currentMode() != SourceMode::TileStream) return;
+
+  if (!isEnabled()) {
+    ++source_gen_;
+    source_.reset();
+    source_kind_ = SourceKind::None;
+    return;
+  }
+
+  const std::string topic = tile_topic_property_->getTopicStd();
+  if (topic.empty()) {
+    ++source_gen_;
+    source_.reset();
+    source_kind_ = SourceKind::None;
+    setStatus(
+      rviz_common::properties::StatusProperty::Warn,
+      "Tile Stream", "No tile stream topic selected.");
+    return;
+  }
+
+  auto node_abs = context_ ? context_->getRosNodeAbstraction().lock() : nullptr;
+  if (!node_abs) {
+    setStatus(
+      rviz_common::properties::StatusProperty::Error,
+      "Tile Stream", "RViz ROS node unavailable.");
+    return;
+  }
+
+  installSource(
+    std::make_unique<TileStreamSource>(node_abs->get_raw_node(), topic),
+    SourceKind::TileStream);
+}
+
 void GsplatDisplay::onSorterKindChanged()
 {
   rebuildSorter();
@@ -337,13 +487,26 @@ void GsplatDisplay::onSourceModeChanged()
   const auto mode = currentMode();
   splat_path_property_->setHidden(mode != SourceMode::File);
   topic_property_->setHidden(mode != SourceMode::Topic);
+  snapshot_ref_topic_property_->setHidden(mode != SourceMode::SnapshotRef);
+  blob_topic_property_->setHidden(mode != SourceMode::BlobTopic);
+  tile_topic_property_->setHidden(mode != SourceMode::TileStream);
 
-  deleteStatus(mode == SourceMode::File ? "Topic" : "Splat File");
+  deleteStatus("Splat File");
+  deleteStatus("Topic");
+  deleteStatus("Snapshot Ref");
+  deleteStatus("Blob Topic");
+  deleteStatus("Tile Stream");
 
   if (mode == SourceMode::File) {
     onSplatPathChanged();
-  } else {
+  } else if (mode == SourceMode::Topic) {
     onTopicChanged();
+  } else if (mode == SourceMode::SnapshotRef) {
+    onSnapshotRefTopicChanged();
+  } else if (mode == SourceMode::BlobTopic) {
+    onBlobTopicChanged();
+  } else if (mode == SourceMode::TileStream) {
+    onTileTopicChanged();
   }
 }
 
@@ -462,7 +625,11 @@ void GsplatDisplay::onLoadResult(
   if (gen != source_gen_ || !splat_cloud_) return;
 
   const char * status_key =
-    (kind == SourceKind::Topic) ? "Topic" : "Splat File";
+    (kind == SourceKind::Topic) ? "Topic" :
+    (kind == SourceKind::SnapshotRef) ? "Snapshot Ref" :
+    (kind == SourceKind::BlobTopic) ? "Blob Topic" :
+    (kind == SourceKind::TileStream) ? "Tile Stream" :
+    "Splat File";
 
   if (!result.ok()) {
     setStatus(
@@ -477,7 +644,10 @@ void GsplatDisplay::onLoadResult(
   splat_cloud_->setSplats(std::move(result.splats), sh_degree);
 
   sh_degree_property_->setMax(sh_degree);
-  if (kind == SourceKind::Topic) {
+  if (kind == SourceKind::Topic ||
+      kind == SourceKind::SnapshotRef ||
+      kind == SourceKind::BlobTopic ||
+      kind == SourceKind::TileStream) {
     const int current = sh_degree_property_->getInt();
     if (current > sh_degree) sh_degree_property_->setValue(sh_degree);
   } else {
@@ -487,7 +657,10 @@ void GsplatDisplay::onLoadResult(
   setStatus(
     rviz_common::properties::StatusProperty::Ok,
     status_key,
-    kind == SourceKind::Topic
+    (kind == SourceKind::Topic ||
+     kind == SourceKind::SnapshotRef ||
+     kind == SourceKind::BlobTopic ||
+     kind == SourceKind::TileStream)
       ? QString("Received %1 gaussians (SH degree %2)").arg(count).arg(sh_degree)
       : QString("Loaded %1 gaussians").arg(count));
 }

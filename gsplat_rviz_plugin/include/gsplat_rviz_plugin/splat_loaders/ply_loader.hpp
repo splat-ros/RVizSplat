@@ -2,6 +2,7 @@
 #define GSPLAT_RVIZ_PLUGIN__PLY_LOADER_HPP_
 
 #include <string>
+#include <cstdint>
 #include <vector>
 
 #include "gsplat_rviz_plugin/splat_gpu.hpp"
@@ -16,6 +17,18 @@ namespace gsplat_rviz_plugin
 GSPLAT_RVIZ_PLUGIN_PUBLIC
 std::vector<SplatGPU> loadPly(
   const std::string & path,
+  std::string & error_msg,
+  int & sh_degree);
+
+GSPLAT_RVIZ_PLUGIN_PUBLIC
+std::vector<SplatGPU> loadPlyBytes(
+  const std::vector<uint8_t> & bytes,
+  std::string & error_msg,
+  int & sh_degree);
+
+GSPLAT_RVIZ_PLUGIN_PUBLIC
+std::vector<SplatGPU> loadPlyBytes(
+  const std::string & bytes,
   std::string & error_msg,
   int & sh_degree);
 

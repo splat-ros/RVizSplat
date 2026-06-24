@@ -1,0 +1,11 @@
+std_msgs/Header header
+string session_id
+uint64 version
+string uri
+string format
+string compression
+uint64 byte_size
+uint64 uncompressed_size
+string map_frame
+geometry_msgs/Transform map_from_source
+bool replace_current

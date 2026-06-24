@@ -25,6 +25,7 @@ find_package(rviz_common REQUIRED)
 find_package(rviz_rendering REQUIRED)
 find_package(rviz_ogre_vendor REQUIRED)
 find_package(gsplat_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(Boost REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(CUDAToolkit QUIET)
@@ -64,6 +65,13 @@ set(gsplat_rviz_plugin_source_files
   src/gsplat_rviz_plugin/splat_loaders/ply_loader.cpp
   src/gsplat_rviz_plugin/splat_loaders/ply_file_source.cpp
   src/gsplat_rviz_plugin/splat_loaders/ros_topic_source.cpp
+  src/gsplat_rviz_plugin/splat_loaders/compact_decoder.cpp
+  src/gsplat_rviz_plugin/splat_loaders/blob_assembler.cpp
+  src/gsplat_rviz_plugin/splat_loaders/snapshot_payload_loader.cpp
+  src/gsplat_rviz_plugin/splat_loaders/snapshot_ref_source.cpp
+  src/gsplat_rviz_plugin/splat_loaders/blob_topic_source.cpp
+  src/gsplat_rviz_plugin/splat_loaders/tile_cache.cpp
+  src/gsplat_rviz_plugin/splat_loaders/tile_stream_source.cpp
   src/gsplat_rviz_plugin/transparency/wboit_compositor.cpp
 )
 
@@ -98,12 +106,9 @@ target_link_libraries(gsplat_rviz_plugin PUBLIC
   rviz_rendering::rviz_rendering
   GLEW::GLEW
   Boost::boost
+  ${geometry_msgs_TARGETS}
+  gsplat_msgs::gsplat_msgs__rosidl_typesupport_cpp
 )
-
-#rosidl_get_typesupport_target(cpp_typesupport_target gsplat_msgs "rosidl_typesupport_cpp")
-target_link_libraries(gsplat_rviz_plugin PUBLIC
-    gsplat_msgs::gsplat_msgs__rosidl_typesupport_cpp
-  )
 #target_link_libraries(gsplat_rviz_plugin PUBLIC "${cpp_typesupport_target}")
 
 target_compile_definitions(gsplat_rviz_plugin PRIVATE "GSPLAT_RVIZ_PLUGIN_BUILDING_LIBRARY")
@@ -129,6 +134,7 @@ ament_export_dependencies(
   rviz_ogre_vendor
   rviz_rendering
   gsplat_msgs
+  geometry_msgs
   Qt${QT_VERSION_MAJOR}
 )
 

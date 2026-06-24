@@ -37,6 +37,42 @@ sudo apt-get install ros-$ROS_DISTRO-gsplat-rviz-plugin ros-$ROS_DISTRO-gsplat-p
 
 # Examples
 
+## Chunked publisher tooling
+
+`gsplat_publisher` includes compatibility publishing through
+`ply_splat_publisher` plus chunked snapshot and tile demo publishers for the
+new blob/tile messages.
+
+Publish a full snapshot as compact DC/covariance/RGBA chunks:
+
+```bash
+ros2 run gsplat_publisher blob_snapshot_publisher --ros-args \
+  -p ply_path:=/path/to/model.ply \
+  -p mode:=compact \
+  -p max_chunk_bytes:=1048576
+```
+
+Publish the original PLY bytes as blob chunks instead:
+
+```bash
+ros2 run gsplat_publisher blob_snapshot_publisher --ros-args \
+  -p ply_path:=/path/to/model.ply \
+  -p mode:=binary_ply
+```
+
+Publish whole-tile replacement updates followed by a commit:
+
+```bash
+ros2 run gsplat_publisher tile_demo_publisher --ros-args \
+  -p ply_path:=/path/to/model.ply \
+  -p tile_size_m:=1.0 \
+  -p max_chunk_bytes:=1048576
+```
+
+The compact payload encoding is `compact_dc_fp16_cov_rgba_v1`: float32 x/y/z,
+float16 covariance upper triangle, RGBA8 from DC color and opacity, and a zero
+`id_or_flags` field.
+
 ## Rendering of a LeRobot SO-100 arm with a scene containing 6 million splats
 
 <p align="left">

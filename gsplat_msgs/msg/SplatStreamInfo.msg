@@ -1,0 +1,10 @@
+std_msgs/Header header
+string session_id
+uint64 current_version
+float32 tile_size_m
+string map_frame
+string[] encodings_supported
+uint64 total_splats_estimate
+uint32 active_tile_count
+bool full_snapshot_available
+string snapshot_uri

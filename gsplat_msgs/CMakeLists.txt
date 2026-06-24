@@ -13,6 +13,10 @@ find_package(std_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Splat.msg"
   "msg/SplatArray.msg"
+  "msg/SplatBlobChunk.msg"
+  "msg/SplatSnapshotRef.msg"
+  "msg/SplatStreamInfo.msg"
+  "msg/SplatTileChunk.msg"
   DEPENDENCIES geometry_msgs std_msgs
 )
 

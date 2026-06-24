@@ -3,7 +3,7 @@
 <package format="3">
   <name>gsplat_publisher</name>
   <version>1.0.0</version>
-  <description>Publishes latched SplatArray messages loaded from a PLY file.</description>
+  <description>Publishes Gaussian splat arrays and chunked splat streams from PLY files.</description>
   <maintainer email="mathur.aditya98@gmail.com">Aditya Mathur</maintainer>
   <maintainer email="akashchikhalikar@gmail.com">Akash Chikhalikar</maintainer>
   <maintainer email="rssuchetan@gmail.com">Suchetan Saravanan</maintainer>

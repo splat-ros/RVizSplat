@@ -1,0 +1,23 @@
+uint8 CLEAR_ALL=0
+uint8 UPSERT_TILE=1
+uint8 DELETE_TILE=2
+uint8 COMMIT=3
+uint8 HEARTBEAT=4
+
+std_msgs/Header header
+string session_id
+uint64 version
+uint8 operation
+int32 tile_x
+int32 tile_y
+int32 tile_z
+uint8 lod
+uint32 chunk_index
+uint32 chunk_count
+string encoding
+string compression
+uint32 splat_count
+uint32 stride
+uint64 uncompressed_size
+uint8[] data
+uint64 chunk_crc64

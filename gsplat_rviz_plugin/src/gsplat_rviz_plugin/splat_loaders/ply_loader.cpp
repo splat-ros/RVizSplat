@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstring>
 #include <fstream>
+#include <istream>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -119,14 +120,11 @@ static SplatGPU buildSplat(
 
 }  // anonymous namespace
 
-std::vector<SplatGPU> loadPly(
-  const std::string & path, std::string & error_msg, int & sh_degree)
+static std::vector<SplatGPU> loadPlyStream(
+  std::istream & file, std::string & error_msg, int & sh_degree)
 {
   error_msg.clear();
   sh_degree = 0;
-
-  std::ifstream file(path, std::ios::binary);
-  if (!file.is_open()) { error_msg = "Cannot open file: " + path; return {}; }
 
   std::string line;
   std::getline(file, line);
@@ -243,6 +241,35 @@ std::vector<SplatGPU> loadPly(
   }
 
   return splats;
+}
+
+std::vector<SplatGPU> loadPly(
+  const std::string & path, std::string & error_msg, int & sh_degree)
+{
+  std::ifstream file(path, std::ios::binary);
+  if (!file.is_open()) {
+    error_msg = "Cannot open file: " + path;
+    sh_degree = 0;
+    return {};
+  }
+  return loadPlyStream(file, error_msg, sh_degree);
+}
+
+std::vector<SplatGPU> loadPlyBytes(
+  const std::vector<uint8_t> & bytes, std::string & error_msg, int & sh_degree)
+{
+  if (bytes.empty()) {
+    return loadPlyBytes(std::string(), error_msg, sh_degree);
+  }
+  const std::string payload(reinterpret_cast<const char *>(bytes.data()), bytes.size());
+  return loadPlyBytes(payload, error_msg, sh_degree);
+}
+
+std::vector<SplatGPU> loadPlyBytes(
+  const std::string & bytes, std::string & error_msg, int & sh_degree)
+{
+  std::istringstream stream(bytes, std::ios::binary);
+  return loadPlyStream(stream, error_msg, sh_degree);
 }
 
 }  // namespace gsplat_rviz_plugin

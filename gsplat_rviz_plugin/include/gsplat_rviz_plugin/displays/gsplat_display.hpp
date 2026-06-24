@@ -52,6 +52,9 @@ private Q_SLOTS:
   void onShDegreeChanged();
   void onAlphaThresholdChanged();
   void onTopicChanged();
+  void onSnapshotRefTopicChanged();
+  void onBlobTopicChanged();
+  void onTileTopicChanged();
   void onSorterKindChanged();
   void onClipChanged();
   void onTransparencyModeChanged();
@@ -59,8 +62,8 @@ private Q_SLOTS:
   void onCaptureTriggerChanged();
 
 private:
-  enum class SourceKind { None, File, Topic };
-  enum class SourceMode { File = 0, Topic = 1 };
+  enum class SourceKind { None, File, Topic, SnapshotRef, BlobTopic, TileStream };
+  enum class SourceMode { File = 0, Topic = 1, SnapshotRef = 2, BlobTopic = 3, TileStream = 4 };
 
   void rebuildSorter();
   void installSource(std::unique_ptr<ISplatSource> source, SourceKind kind);
@@ -92,6 +95,9 @@ private:
   rviz_common::properties::EnumProperty *       source_mode_property_;
   rviz_common::properties::FilePickerProperty * splat_path_property_;
   rviz_common::properties::RosTopicProperty *   topic_property_;
+  rviz_common::properties::RosTopicProperty *   snapshot_ref_topic_property_;
+  rviz_common::properties::RosTopicProperty *   blob_topic_property_;
+  rviz_common::properties::RosTopicProperty *   tile_topic_property_;
 
   // Under "Advanced" group.
   rviz_common::properties::IntProperty *        sh_degree_property_;

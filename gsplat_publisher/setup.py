@@ -21,12 +21,14 @@ setup(
     zip_safe=True,
     maintainer='user',
     maintainer_email='user@example.com',
-    description='Publishes latched SplatArray messages loaded from a PLY file.',
+    description='Publishes Gaussian splat arrays and chunked splat streams from PLY files.',
     license='Apache-2.0',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'blob_snapshot_publisher = gsplat_publisher.blob_snapshot_publisher:main',
             'ply_splat_publisher = gsplat_publisher.ply_splat_publisher:main',
+            'tile_demo_publisher = gsplat_publisher.tile_demo_publisher:main',
         ],
     },
 )
