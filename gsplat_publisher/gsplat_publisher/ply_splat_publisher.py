@@ -3,6 +3,7 @@
 
 import math
 import os
+import time
 
 import numpy as np
 import rclpy
@@ -50,9 +51,20 @@ def _compute_covariance(scales: np.ndarray, quats: np.ndarray) -> np.ndarray:
     return cov36
 
 
-def _load_splat_array(ply_path: str, sh_degree: int, stamp, frame_id: str) -> SplatArray:
+def _load_splat_array(
+    ply_path: str, sh_degree: int, stamp, frame_id: str,
+    logger=None,
+) -> SplatArray:
+    def _log(msg):
+        if logger is not None:
+            logger.debug(msg)
+        else:
+            print(msg)
+
+    t0 = time.perf_counter()
     verts = read_ply_vertex(ply_path)
     n = len(verts)
+    _log(f'[profile] read_ply_vertex: {time.perf_counter() - t0:.3f}s  (n={n})')
     prop_names = set(verts.dtype.names)
 
     n_rest = sum(1 for p in prop_names if p.startswith('f_rest_'))
@@ -85,8 +97,13 @@ def _load_splat_array(ply_path: str, sh_degree: int, stamp, frame_id: str) -> Sp
         np.exp(verts['scale_2'].astype(np.float64)),
     ], axis=1)
 
+    _log(f'[profile] numpy prep (pos/quat/scale): {time.perf_counter() - t0:.3f}s')
+    t1 = time.perf_counter()
+
     # --- covariance (n, 36)
     cov36 = _compute_covariance(scales, quats)
+    _log(f'[profile] covariance: {time.perf_counter() - t1:.3f}s')
+    t1 = time.perf_counter()
 
     # --- opacity as uint8
     raw_opacity = verts['opacity'].astype(np.float64)
@@ -112,6 +129,8 @@ def _load_splat_array(ply_path: str, sh_degree: int, stamp, frame_id: str) -> Sp
         sh_parts.append(np.stack([r_col, g_col, b_col], axis=1))  # (n, 3)
 
     sh_all = np.concatenate(sh_parts, axis=1)  # (n, 3*(1+nrc_to_use))
+    _log(f'[profile] SH assembly: {time.perf_counter() - t1:.3f}s')
+    t1 = time.perf_counter()
 
     # --- build message
     array_msg = SplatArray()
@@ -137,6 +156,8 @@ def _load_splat_array(ply_path: str, sh_degree: int, stamp, frame_id: str) -> Sp
 
         array_msg.splats.append(splat)
 
+    _log(f'[profile] per-splat msg build: {time.perf_counter() - t1:.3f}s')
+    _log(f'[profile] total _load_splat_array: {time.perf_counter() - t0:.3f}s')
     return array_msg
 
 
@@ -169,9 +190,14 @@ class PlySplatPublisher(Node):
 
         self.get_logger().info(f'Loading {ply_path} (SH degree {sh_degree}) …')
         stamp = self.get_clock().now().to_msg()
-        msg = _load_splat_array(ply_path, sh_degree, stamp, frame_id='map')
+        msg = _load_splat_array(
+            ply_path, sh_degree, stamp,
+            frame_id='map', logger=self.get_logger())
 
+        t_pub = time.perf_counter()
         self._pub.publish(msg)
+        self.get_logger().debug(
+            f'[profile] publish: {time.perf_counter() - t_pub:.3f}s')
         self.get_logger().info(
             f'Published {len(msg.splats)} splats on /gaussian_splats (latched)'
         )
