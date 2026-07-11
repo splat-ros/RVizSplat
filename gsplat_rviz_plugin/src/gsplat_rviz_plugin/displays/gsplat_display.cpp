@@ -496,7 +496,7 @@ void GsplatDisplay::onLoadResult(
     const int current = sh_degree_property_->getInt();
     if (current > sh_degree) sh_degree_property_->setValue(sh_degree);
   } else {
-    sh_degree_property_->setValue(std::min(1, sh_degree));
+    sh_degree_property_->setValue(sh_degree);
   }
 
   setStatus(
