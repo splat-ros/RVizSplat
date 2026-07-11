@@ -6,7 +6,6 @@ import os
 
 import numpy as np
 import rclpy
-from ament_index_python.packages import get_package_share_directory
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
@@ -152,8 +151,8 @@ class PlySplatPublisher(Node):
         sh_degree = self.get_parameter('sh_degree').get_parameter_value().integer_value
 
         if not ply_path:
-            pkg_share = get_package_share_directory('gsplat_publisher')
-            ply_path = os.path.join(pkg_share, 'splats', 'only_bonsai.ply')
+            self.get_logger().fatal('ply_path parameter is required')
+            raise ValueError('ply_path parameter is required')
 
         sh_degree = max(0, min(3, sh_degree))
 
