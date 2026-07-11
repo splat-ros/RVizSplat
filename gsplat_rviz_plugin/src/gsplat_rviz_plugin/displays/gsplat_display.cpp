@@ -1,9 +1,12 @@
 #include "gsplat_rviz_plugin/displays/gsplat_display.hpp"
 
 #include <algorithm>
+#include <filesystem>
 #include <utility>
 
 #include <QMetaObject>
+
+#include <rclcpp/logging.hpp>
 
 #include <OgreCamera.h>
 #include <OgreSceneManager.h>
@@ -385,6 +388,18 @@ void GsplatDisplay::onCaptureTriggerChanged()
     setStatus(
       rviz_common::properties::StatusProperty::Warn,
       "Scene Capture", "Save path is empty.");
+    return;
+  }
+
+  // rviz_rendering's captureScreenShot crashes if the parent directory is
+  // missing, so validate it here and log to the terminal instead.
+  const std::filesystem::path fs_path(path);
+  const auto parent = fs_path.parent_path();
+  if (!parent.empty() && !std::filesystem::is_directory(parent)) {
+    RCLCPP_ERROR(
+      rclcpp::get_logger("gsplat_rviz_plugin"),
+      "Scene Capture: directory does not exist: %s",
+      parent.c_str());
     return;
   }
 
