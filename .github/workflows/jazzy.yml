@@ -20,6 +20,12 @@ jobs:
         with:
           path: ros_ws/src/RVizSplat
 
+      - name: Checkout splat_interfaces
+        uses: actions/checkout@v4
+        with:
+          repository: splat-ros/splat_interfaces
+          path: ros_ws/src/splat_interfaces
+
       - name: Install system dependencies
         run: |
           apt-get update
