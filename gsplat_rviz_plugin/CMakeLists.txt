@@ -58,6 +58,8 @@ endforeach()
 set(gsplat_rviz_plugin_source_files
   src/gsplat_rviz_plugin/displays/gsplat_display.cpp
   src/gsplat_rviz_plugin/splat_cloud.cpp
+  src/gsplat_rviz_plugin/mesh_splat_cloud.cpp
+  src/gsplat_rviz_plugin/splat_loaders/mesh_ply_loader.cpp
   src/gsplat_rviz_plugin/perf_monitor.cpp
   src/gsplat_rviz_plugin/sorters/cpu_sorter.cpp
   src/gsplat_rviz_plugin/sorters/sorter_factory.cpp

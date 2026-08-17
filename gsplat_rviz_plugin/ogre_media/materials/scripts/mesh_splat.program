@@ -1,0 +1,17 @@
+vertex_program gsplat_rviz_plugin/MeshSplat.vert glsl
+{
+    source mesh_splat.vert
+    default_params
+    {
+        param_named_auto worldViewProj  worldviewproj_matrix
+        param_named_auto camPosObj       camera_position_object_space
+        param_named      u_mesh_sh       int 0
+        param_named      sh_degree       int 0
+        param_named      u_sh_stride     int 1
+    }
+}
+
+fragment_program gsplat_rviz_plugin/MeshSplat.frag glsl
+{
+    source mesh_splat.frag
+}

@@ -23,6 +23,8 @@
 #include "gsplat_rviz_plugin/sorters/sorter_factory.hpp"
 #include "gsplat_rviz_plugin/splat_loaders/ply_file_source.hpp"
 #include "gsplat_rviz_plugin/splat_loaders/ros_topic_source.hpp"
+#include "gsplat_rviz_plugin/splat_loaders/mesh_ply_loader.hpp"
+#include "gsplat_rviz_plugin/mesh_splat_cloud.hpp"
 #include "gsplat_rviz_plugin/splat_cloud.hpp"
 #include "gsplat_rviz_plugin/splat_gpu.hpp"
 #include "gsplat_rviz_plugin/transparency/wboit_compositor.hpp"
@@ -42,12 +44,15 @@ GsplatDisplay::GsplatDisplay()
     "Where splats come from. Exactly one of the two source fields below is "
     "active at a time.",
     this, SLOT(onSourceModeChanged()), this);
-  source_mode_property_->addOption("PLY File", static_cast<int>(SourceMode::File));
-  source_mode_property_->addOption("Topic",    static_cast<int>(SourceMode::Topic));
+  source_mode_property_->addOption("PLY File",      static_cast<int>(SourceMode::File));
+  source_mode_property_->addOption("Topic",         static_cast<int>(SourceMode::Topic));
+  source_mode_property_->addOption("Mesh PLY File", static_cast<int>(SourceMode::MeshFile));
 
   splat_path_property_ = new rviz_common::properties::FilePickerProperty(
     "Splat File", "",
-    "Path to a 3DGS-format PLY file to visualize.",
+    "Path to a PLY file to visualize. In \"PLY File\" mode this is a "
+    "3DGS Gaussian-splat PLY; in \"Mesh PLY File\" mode it is a mesh-splat "
+    "PLY (triangle mesh with per-vertex spherical harmonics).",
     this, SLOT(onSplatPathChanged()),
     this);
 
@@ -201,6 +206,7 @@ void GsplatDisplay::onInitialize()
 {
   rviz_common::Display::onInitialize();
   splat_cloud_ = std::make_unique<SplatCloud>(scene_node_);
+  mesh_cloud_  = std::make_unique<MeshSplatCloud>(scene_node_);
 
   rebuildSorter();
 
@@ -238,14 +244,16 @@ void GsplatDisplay::reset()
 {
   rviz_common::Display::reset();
   if (splat_cloud_) splat_cloud_->clear();
+  if (mesh_cloud_)  mesh_cloud_->clear();
   sh_degree_property_->setMax(0);
   sh_degree_property_->setValue(0);
 }
 
 void GsplatDisplay::onSplatPathChanged()
 {
-  if (currentMode() != SourceMode::File) return;
-  if (!splat_cloud_) return;
+  const auto mode = currentMode();
+  if (mode != SourceMode::File && mode != SourceMode::MeshFile) return;
+  if (!splat_cloud_ || !mesh_cloud_) return;
 
   const QString path = splat_path_property_->getString();
   if (path.isEmpty()) {
@@ -253,9 +261,15 @@ void GsplatDisplay::onSplatPathChanged()
     source_.reset();
     source_kind_ = SourceKind::None;
     splat_cloud_->clear();
+    mesh_cloud_->clear();
     setStatus(
       rviz_common::properties::StatusProperty::Warn,
       "Splat File", "No file selected.");
+    return;
+  }
+
+  if (mode == SourceMode::MeshFile) {
+    loadMeshFile();
     return;
   }
 
@@ -264,11 +278,56 @@ void GsplatDisplay::onSplatPathChanged()
     SourceKind::File);
 }
 
+void GsplatDisplay::loadMeshFile()
+{
+  if (!mesh_cloud_) return;
+
+  // No ROS-topic source involved; bump the generation so any in-flight
+  // gaussian load callback is dropped, and make sure the gaussian cloud
+  // is empty while a mesh is shown.
+  ++source_gen_;
+  source_.reset();
+  source_kind_ = SourceKind::None;
+  if (splat_cloud_) splat_cloud_->clear();
+
+  const std::string path = splat_path_property_->getString().toStdString();
+  MeshSplatData data = loadMeshPly(path);
+  if (!data.ok()) {
+    mesh_cloud_->clear();
+    setStatus(
+      rviz_common::properties::StatusProperty::Error,
+      "Splat File", QString::fromStdString(data.error));
+    return;
+  }
+
+  const uint32_t verts = data.vertexCount();
+  const uint32_t tris  = data.triangleCount();
+  const int sh_degree  = data.sh_degree;
+
+  mesh_cloud_->setMesh(std::move(data));
+
+  sh_degree_property_->setMax(sh_degree);
+  sh_degree_property_->setValue(std::min(1, sh_degree));
+  mesh_cloud_->setShDegree(sh_degree_property_->getInt());
+
+  setStatus(
+    rviz_common::properties::StatusProperty::Ok,
+    "Splat File",
+    QString("Loaded mesh splat: %1 vertices, %2 triangles (SH degree %3)")
+      .arg(verts).arg(tris).arg(sh_degree));
+
+  if (context_) context_->queueRender();
+}
+
 void GsplatDisplay::onShDegreeChanged()
 {
   if (splat_cloud_) {
     splat_cloud_->setShDegree(sh_degree_property_->getInt());
   }
+  if (mesh_cloud_) {
+    mesh_cloud_->setShDegree(sh_degree_property_->getInt());
+  }
+  if (context_) context_->queueRender();
 }
 
 void GsplatDisplay::onAlphaThresholdChanged()
@@ -331,16 +390,18 @@ void GsplatDisplay::onSourceModeChanged()
   source_.reset();
   source_kind_ = SourceKind::None;
   if (splat_cloud_) splat_cloud_->clear();
+  if (mesh_cloud_)  mesh_cloud_->clear();
   sh_degree_property_->setMax(0);
   sh_degree_property_->setValue(0);
 
   const auto mode = currentMode();
-  splat_path_property_->setHidden(mode != SourceMode::File);
+  const bool file_mode = (mode == SourceMode::File || mode == SourceMode::MeshFile);
+  splat_path_property_->setHidden(!file_mode);
   topic_property_->setHidden(mode != SourceMode::Topic);
 
-  deleteStatus(mode == SourceMode::File ? "Topic" : "Splat File");
+  deleteStatus(mode == SourceMode::Topic ? "Splat File" : "Topic");
 
-  if (mode == SourceMode::File) {
+  if (file_mode) {
     onSplatPathChanged();
   } else {
     onTopicChanged();

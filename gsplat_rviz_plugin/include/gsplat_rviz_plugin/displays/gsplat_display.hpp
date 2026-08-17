@@ -28,6 +28,7 @@ class Viewport;
 namespace gsplat_rviz_plugin
 {
 class SplatCloud;
+class MeshSplatCloud;
 
 namespace displays
 {
@@ -60,7 +61,11 @@ private Q_SLOTS:
 
 private:
   enum class SourceKind { None, File, Topic };
-  enum class SourceMode { File = 0, Topic = 1 };
+  // File = Gaussian-splat PLY, Topic = streamed gaussians, MeshFile = mesh-splat PLY.
+  enum class SourceMode { File = 0, Topic = 1, MeshFile = 2 };
+
+  // Load a mesh-splat PLY from splat_path_property_ into mesh_cloud_.
+  void loadMeshFile();
 
   void rebuildSorter();
   void installSource(std::unique_ptr<ISplatSource> source, SourceKind kind);
@@ -115,7 +120,8 @@ private:
   rviz_common::properties::StringProperty *     capture_path_property_;
   rviz_common::properties::BoolProperty *       capture_trigger_property_;
 
-  std::unique_ptr<SplatCloud>   splat_cloud_;
+  std::unique_ptr<SplatCloud>     splat_cloud_;
+  std::unique_ptr<MeshSplatCloud> mesh_cloud_;
   std::unique_ptr<ISplatSource> source_;
   SourceKind                    source_kind_ = SourceKind::None;
   // Bumped each time source_ is (re)assigned or cleared. Queued main-thread
